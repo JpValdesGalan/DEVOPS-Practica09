@@ -1,0 +1,71 @@
+version: "3"
+
+services:
+#--------Api Server -----
+  api-server:
+    container_name: "api-server"
+    restart: always
+    build: ./api-server/.
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DATABASE=${DB_DATABASE}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - DATABASE_URL=${DATABASE_URL}
+      - CHOKIDAR_USEPOLLING="true"
+    working_dir: /app
+    ports:
+      - 5001:5001
+    networks:
+      - app_network
+#--------Redis -----
+  redis:
+    container_name: "redis-service"
+    image: redis:alpine
+    restart: always
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_network
+#--------DB -----
+  db:
+    container_name: "database"
+    build: ./db/
+    restart: always
+    environment:
+      MYSQL_DATABASE: "${DB_DATABASE}"
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_USER: "${DB_USER}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+    command: --init-file /init_scripts/init_db.sql
+    volumes:
+      - db_data:/var/lib/mysql
+      - init_scripts:/init_scripts
+    networks:
+      - app_network
+#--------Client -----
+  client:
+    image: node:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./client:/app
+    networks:
+      - app_network
+      - web_network
+#-------------
+volumes:
+  db_data:
+  redis_data:
+  init_scripts:
+networks:
+  app_network:
+    driver: bridge
