@@ -28,8 +28,6 @@ services:
     image: redis:alpine
     restart: always
     command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
     networks:
       - app_network
 #--------DB -----
@@ -49,23 +47,66 @@ services:
       - init_scripts:/init_scripts
     networks:
       - app_network
-#--------Client -----
+#--------CLIENT -----
   client:
-    image: node:latest
+    build:
+      context: ./client
+    command: npm start
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
-      - NODE_ENV=development
-    volumes:
-      - ./client:/app
+      NODE_ENV: development
+      WATCHPACK_POLLING: true
     networks:
       - app_network
-      - web_network
+#---------- Jenkins --------  
+  jenkins:
+    build:
+      context: .
+      dockerfile: ./jenkins/Dockerfile
+    privileged: true
+    user: root
+    restart: always
+    ports:
+      - "9090:8080"
+      - "50000:50000"
+    dns:
+      #- 8.8.8.8
+      #- 4.4.4.4
+      - 148.201.3.10
+      - 148.201.3.12
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - jenkins_home:/var/jenkins_home
+#---------- Agent --------
+  agent:
+    build: 
+      context: .
+      dockerfile: ./agent/Dockerfile
+    ports:
+      - "2200:22"
+    dns:
+      #- 8.8.8.8
+      #- 4.4.4.4
+      - 148.201.3.10
+      - 148.201.3.12
+    volumes:
+      - jenkins-ssh-agent:/home/jenkins/agent
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JENKINS_AGENT_SSH_PUBKEY=${JENKINS_AGENT_SSH_PUBKEY}
+#---------- SonarQube --------
+  sonarqube:
+    image: sonarqube
+    ports:
+      - 9000:9000
 #-------------
 volumes:
   db_data:
   redis_data:
   init_scripts:
+  jenkins_home:
+  jenkins-ssh-agent:
 networks:
   app_network:
     driver: bridge
